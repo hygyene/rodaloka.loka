@@ -1,0 +1,418 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 0. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 2 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isVerified() && request.auth.token.email == 'nasiputih435@gmail.com';
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['user_id', 'uid', 'full_name', 'auth_provider', 'active_role', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['user_id', 'uid', 'full_name', 'phone_number', 'email', 'auth_provider', 'active_role', 'avatar_url', 'saved_addresses', 'spreadsheet_id', 'created_at', 'updated_at'])
+        && data.user_id is string && data.user_id.size() >= 4 && data.user_id.size() <= 64
+        && data.uid is string && data.uid == request.auth.uid
+        && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 120
+        && (!('phone_number' in data) || (data.phone_number is string && data.phone_number.size() <= 24))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 160))
+        && data.auth_provider in ['google', 'facebook', 'phone']
+        && data.active_role in ['pedagang', 'pembeli']
+        && (!('avatar_url' in data) || (data.avatar_url is string && data.avatar_url.size() <= 500))
+        && (!('saved_addresses' in data) || (data.saved_addresses is list && data.saved_addresses.size() <= 10 && (data.saved_addresses.size() == 0 || data.saved_addresses[0] is map)))
+        && (!('spreadsheet_id' in data) || (data.spreadsheet_id is string && data.spreadsheet_id.size() <= 128))
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
+    }
+
+    function isValidVendor(data) {
+      return data.keys().hasAll(['vendor_id', 'owner_uid', 'user_id', 'shop_name', 'username', 'category', 'description', 'address_text', 'lat', 'lng', 'lat_lng', 'operating_hours', 'is_open', 'rating_avg', 'review_count', 'delivery_fee', 'media', 'courier_public', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['vendor_id', 'owner_uid', 'user_id', 'shop_name', 'username', 'category', 'description', 'address_text', 'lat', 'lng', 'lat_lng', 'operating_hours', 'is_open', 'rating_avg', 'review_count', 'delivery_fee', 'media', 'courier_public', 'created_at', 'updated_at'])
+        && data.vendor_id is string && data.vendor_id.size() >= 4 && data.vendor_id.size() <= 64
+        && data.owner_uid is string && (data.owner_uid == request.auth.uid || isAdmin())
+        && data.user_id is string && data.user_id.size() <= 64
+        && data.shop_name is string && data.shop_name.size() >= 2 && data.shop_name.size() <= 120
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 64 && data.username.matches('^@[a-z0-9_.]+$')
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 64
+        && data.description is string && data.description.size() <= 600
+        && data.address_text is string && data.address_text.size() >= 2 && data.address_text.size() <= 240
+        && data.lat is number && data.lat >= -90 && data.lat <= 90
+        && data.lng is number && data.lng >= -180 && data.lng <= 180
+        && data.lat_lng is string && data.lat_lng.size() <= 64
+        && data.operating_hours is string && data.operating_hours.size() <= 64
+        && data.is_open is bool
+        && data.rating_avg is number && data.rating_avg >= 1 && data.rating_avg <= 5
+        && data.review_count is number && data.review_count >= 0
+        && data.delivery_fee is number && data.delivery_fee >= 0 && data.delivery_fee <= 100000
+        && data.media is map
+        && data.courier_public is map
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
+    }
+
+    function isValidVendorFinance(data) {
+      return data.keys().hasAll(['owner_uid', 'bank_name', 'account_number', 'account_holder', 'courier_phone', 'updated_at'])
+        && data.keys().hasOnly(['owner_uid', 'bank_name', 'account_number', 'account_holder', 'courier_phone', 'updated_at'])
+        && data.owner_uid is string && data.owner_uid == request.auth.uid
+        && data.bank_name is string && data.bank_name.size() <= 64
+        && data.account_number is string && data.account_number.size() <= 40
+        && data.account_holder is string && data.account_holder.size() <= 120
+        && data.courier_phone is string && data.courier_phone.size() <= 24
+        && data.updated_at is timestamp;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['product_id', 'vendor_id', 'owner_uid', 'product_name', 'description', 'category', 'price', 'stock', 'is_available', 'image_url', 'sold_count', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['product_id', 'vendor_id', 'owner_uid', 'product_name', 'description', 'category', 'price', 'stock', 'is_available', 'image_url', 'sold_count', 'created_at', 'updated_at'])
+        && data.product_id is string && data.product_id.size() >= 4 && data.product_id.size() <= 64
+        && data.vendor_id is string && data.vendor_id.size() >= 4 && data.vendor_id.size() <= 64
+        && data.owner_uid is string && data.owner_uid.size() >= 2 && data.owner_uid.size() <= 128
+        && data.product_name is string && data.product_name.size() >= 2 && data.product_name.size() <= 120
+        && data.description is string && data.description.size() <= 400
+        && data.category in ['Makanan', 'Minuman']
+        && data.price is number && data.price >= 500 && data.price <= 5000000
+        && data.stock is number && data.stock >= 0 && data.stock <= 10000
+        && data.is_available is bool
+        && data.image_url is string && data.image_url.size() <= 500
+        && data.sold_count is number && data.sold_count >= 0
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['order_id', 'buyer_uid', 'buyer_id', 'buyer_name', 'vendor_id', 'vendor_owner_uid', 'vendor_name', 'delivery_address', 'subtotal', 'delivery_fee', 'total_amount', 'payment_method', 'payment_status', 'order_status', 'buyer_note', 'eta_minutes', 'items_summary', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['order_id', 'buyer_uid', 'buyer_id', 'buyer_name', 'vendor_id', 'vendor_owner_uid', 'vendor_name', 'delivery_address', 'subtotal', 'delivery_fee', 'total_amount', 'payment_method', 'payment_status', 'order_status', 'buyer_note', 'eta_minutes', 'items_summary', 'created_at', 'updated_at'])
+        && data.order_id is string && data.order_id.size() >= 4 && data.order_id.size() <= 64
+        && data.buyer_uid is string && data.buyer_uid.size() >= 2 && data.buyer_uid.size() <= 128
+        && data.buyer_id is string && data.buyer_id.size() <= 64
+        && data.buyer_name is string && data.buyer_name.size() <= 120
+        && data.vendor_id is string && data.vendor_id.size() >= 4 && data.vendor_id.size() <= 64
+        && data.vendor_owner_uid is string && data.vendor_owner_uid.size() >= 2 && data.vendor_owner_uid.size() <= 128
+        && data.vendor_name is string && data.vendor_name.size() <= 120
+        && data.delivery_address is string && data.delivery_address.size() >= 2 && data.delivery_address.size() <= 300
+        && data.subtotal is number && data.subtotal >= 0
+        && data.delivery_fee is number && data.delivery_fee >= 0
+        && data.total_amount is number && data.total_amount == data.subtotal + data.delivery_fee
+        && data.payment_method in ['Tunai', 'QRIS', 'Transfer']
+        && data.payment_status in ['unpaid', 'paid']
+        && data.order_status in ['received', 'preparing', 'ready', 'delivering', 'completed', 'rejected']
+        && data.buyer_note is string && data.buyer_note.size() <= 300
+        && data.eta_minutes is number && data.eta_minutes >= 0 && data.eta_minutes <= 240
+        && data.items_summary is list && data.items_summary.size() >= 1 && data.items_summary.size() <= 30 && data.items_summary[0] is map
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
+    }
+
+    function isValidOrderItem(data) {
+      return data.keys().hasAll(['item_id', 'order_id', 'product_id', 'product_name', 'qty', 'unit_price', 'line_total'])
+        && data.keys().hasOnly(['item_id', 'order_id', 'product_id', 'product_name', 'qty', 'unit_price', 'line_total'])
+        && data.item_id is string && data.item_id.size() <= 64
+        && data.order_id is string && data.order_id.size() <= 64
+        && data.product_id is string && data.product_id.size() <= 64
+        && data.product_name is string && data.product_name.size() <= 120
+        && data.qty is number && data.qty >= 1 && data.qty <= 100
+        && data.unit_price is number && data.unit_price >= 0
+        && data.line_total is number && data.line_total == data.qty * data.unit_price;
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasAll(['fav_id', 'user_uid', 'user_id', 'vendor_id', 'created_at'])
+        && data.keys().hasOnly(['fav_id', 'user_uid', 'user_id', 'vendor_id', 'created_at'])
+        && data.fav_id is string && data.fav_id.size() <= 160
+        && data.user_uid is string && data.user_uid == request.auth.uid
+        && data.user_id is string && data.user_id.size() <= 64
+        && data.vendor_id is string && data.vendor_id.size() <= 64
+        && data.created_at is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['notif_id', 'recipient_uid', 'sender_uid', 'category', 'title', 'body', 'is_read', 'order_id', 'created_at'])
+        && data.keys().hasOnly(['notif_id', 'recipient_uid', 'sender_uid', 'category', 'title', 'body', 'is_read', 'order_id', 'created_at'])
+        && data.notif_id is string && data.notif_id.size() <= 64
+        && data.recipient_uid is string && data.recipient_uid.size() <= 128
+        && data.sender_uid is string && data.sender_uid.size() <= 128
+        && data.category in ['order', 'payment', 'promo', 'app']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 400
+        && data.is_read is bool
+        && data.order_id is string && data.order_id.size() <= 64
+        && data.created_at is timestamp;
+    }
+
+    function isValidOrderTransition(prev, next) {
+      return (prev == 'received' && (next == 'preparing' || next == 'rejected'))
+        || (prev == 'preparing' && (next == 'ready' || next == 'rejected'))
+        || (prev == 'ready' && next == 'delivering')
+        || (prev == 'delivering' && next == 'completed');
+    }
+
+    // --- 1. Users (Strict PII Isolation) ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUser(incoming())
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isVerified() && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().user_id == existing().user_id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'phone_number', 'active_role', 'avatar_url', 'saved_addresses', 'spreadsheet_id', 'updated_at']);
+      allow delete: if false;
+    }
+
+    // --- 2. Vendors (Public Storefront + Private Finance Split) ---
+    match /vendors/{vendorId} {
+      allow get: if isValidId(vendorId);
+      allow list: if resource.data.vendor_id is string;
+      allow create: if isVerified() && isValidId(vendorId)
+        && isValidVendor(incoming())
+        && incoming().vendor_id == vendorId
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isVerified() && isValidId(vendorId)
+        && isValidVendor(incoming())
+        && (existing().owner_uid == request.auth.uid || isAdmin())
+        && incoming().owner_uid == existing().owner_uid
+        && incoming().vendor_id == existing().vendor_id
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['shop_name', 'category', 'description', 'address_text', 'lat', 'lng', 'lat_lng', 'operating_hours', 'is_open', 'delivery_fee', 'media', 'courier_public', 'updated_at']);
+      allow delete: if isVerified() && isValidId(vendorId) && (existing().owner_uid == request.auth.uid || isAdmin());
+
+      match /private/{docId} {
+        allow get: if isVerified() && isValidId(vendorId) && isValidId(docId)
+          && get(/databases/$(database)/documents/vendors/$(vendorId)).data.owner_uid == request.auth.uid;
+        allow list: if false;
+        allow create: if isVerified() && isValidId(vendorId) && docId == 'finance'
+          && isValidVendorFinance(incoming())
+          && incoming().updated_at == request.time
+          && get(/databases/$(database)/documents/vendors/$(vendorId)).data.owner_uid == request.auth.uid;
+        allow update: if isVerified() && isValidId(vendorId) && docId == 'finance'
+          && isValidVendorFinance(incoming())
+          && existing().owner_uid == request.auth.uid
+          && incoming().owner_uid == existing().owner_uid
+          && incoming().updated_at == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['bank_name', 'account_number', 'account_holder', 'courier_phone', 'updated_at']);
+        allow delete: if false;
+      }
+    }
+
+    // --- 3. Products (Catalog) ---
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if resource.data.product_id is string;
+      allow create: if isVerified() && isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().product_id == productId
+        && (incoming().owner_uid == request.auth.uid || isAdmin())
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time
+        && (get(/databases/$(database)/documents/vendors/$(incoming().vendor_id)).data.owner_uid == request.auth.uid || isAdmin());
+      allow update: if isVerified() && isValidId(productId)
+        && isValidProduct(incoming())
+        && incoming().product_id == existing().product_id
+        && incoming().vendor_id == existing().vendor_id
+        && incoming().owner_uid == existing().owner_uid
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && (
+          // Action 1: Vendor owner or admin edits product details
+          ((existing().owner_uid == request.auth.uid || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['product_name', 'description', 'category', 'price', 'stock', 'is_available', 'image_url', 'updated_at']))
+          ||
+          // Action 2: Buyer order stock deduction
+          (incoming().diff(existing()).affectedKeys().hasOnly(['stock', 'sold_count', 'updated_at'])
+            && incoming().stock < existing().stock
+            && incoming().stock >= 0
+            && incoming().sold_count == existing().sold_count + (existing().stock - incoming().stock))
+        );
+      allow delete: if isVerified() && isValidId(productId) && (existing().owner_uid == request.auth.uid || isAdmin());
+    }
+
+    // --- 4. Orders & 5. Order Items ---
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && isValidId(orderId)
+        && (existing().buyer_uid == request.auth.uid || existing().vendor_owner_uid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn()
+        && (resource.data.buyer_uid == request.auth.uid || resource.data.vendor_owner_uid == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().order_id == orderId
+        && incoming().buyer_uid == request.auth.uid
+        && incoming().order_status == 'received'
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time
+        && exists(/databases/$(database)/documents/vendors/$(incoming().vendor_id));
+      allow update: if isVerified() && isValidId(orderId)
+        && isValidOrder(incoming())
+        && (!(existing().order_status in ['completed', 'rejected']) || isAdmin())
+        && incoming().order_id == existing().order_id
+        && incoming().buyer_uid == existing().buyer_uid
+        && incoming().vendor_id == existing().vendor_id
+        && incoming().vendor_owner_uid == existing().vendor_owner_uid
+        && incoming().subtotal == existing().subtotal
+        && incoming().delivery_fee == existing().delivery_fee
+        && incoming().total_amount == existing().total_amount
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && (
+          // Action 1: Vendor advances order status / ETA / payment confirmation
+          ((existing().vendor_owner_uid == request.auth.uid || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['order_status', 'eta_minutes', 'payment_status', 'updated_at'])
+            && (incoming().order_status == existing().order_status || isValidOrderTransition(existing().order_status, incoming().order_status)))
+          ||
+          // Action 2: Buyer confirms delivery receipt
+          (existing().buyer_uid == request.auth.uid
+            && existing().order_status == 'delivering'
+            && incoming().order_status == 'completed'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['order_status', 'payment_status', 'updated_at']))
+        );
+      allow delete: if false;
+
+      match /items/{itemId} {
+        allow get: if isSignedIn() && isValidId(orderId) && isValidId(itemId)
+          && (get(/databases/$(database)/documents/orders/$(orderId)).data.buyer_uid == request.auth.uid
+              || get(/databases/$(database)/documents/orders/$(orderId)).data.vendor_owner_uid == request.auth.uid);
+        allow list: if false;
+        allow create: if isVerified() && isValidId(orderId) && isValidId(itemId)
+          && isValidOrderItem(incoming())
+          && incoming().order_id == orderId
+          && get(/databases/$(database)/documents/orders/$(orderId)).data.buyer_uid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // --- 6. Favorites ---
+    match /favorites/{favId} {
+      allow get: if isSignedIn() && isValidId(favId) && existing().user_uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.user_uid == request.auth.uid;
+      allow create: if isVerified() && isValidId(favId)
+        && isValidFavorite(incoming())
+        && incoming().fav_id == favId
+        && incoming().created_at == request.time
+        && exists(/databases/$(database)/documents/vendors/$(incoming().vendor_id));
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(favId) && existing().user_uid == request.auth.uid;
+    }
+
+    // --- 7. Promos ---
+    match /promos/{promoId} {
+      allow get: if isValidId(promoId);
+      allow list: if resource.data.is_active == true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- 8. Notifications ---
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId) && existing().recipient_uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.recipient_uid == request.auth.uid;
+      allow create: if isVerified() && isValidId(notifId)
+        && isValidNotification(incoming())
+        && incoming().notif_id == notifId
+        && incoming().sender_uid == request.auth.uid
+        && incoming().is_read == false
+        && incoming().created_at == request.time;
+      allow update: if isVerified() && isValidId(notifId)
+        && isValidNotification(incoming())
+        && existing().recipient_uid == request.auth.uid
+        && incoming().recipient_uid == existing().recipient_uid
+        && incoming().sender_uid == existing().sender_uid
+        && incoming().created_at == existing().created_at
+        && incoming().is_read == true
+        && incoming().diff(existing()).affectedKeys().hasOnly(['is_read']);
+      allow delete: if isVerified() && isValidId(notifId) && existing().recipient_uid == request.auth.uid;
+    }
+
+    // --- 9. Komunitas & Suara Pedagang Pantura ---
+    function isValidCommunityPost(data) {
+      return data.keys().hasAll(['post_id', 'author_uid', 'author_name', 'shop_name', 'corridor', 'topic', 'title', 'body', 'helpful_count', 'created_at'])
+        && data.keys().hasOnly(['post_id', 'author_uid', 'author_name', 'shop_name', 'corridor', 'topic', 'title', 'body', 'helpful_count', 'created_at'])
+        && data.post_id is string && data.post_id.size() >= 4 && data.post_id.size() <= 64
+        && data.author_uid is string && data.author_uid.size() >= 2 && data.author_uid.size() <= 128
+        && data.author_name is string && data.author_name.size() >= 1 && data.author_name.size() <= 120
+        && data.shop_name is string && data.shop_name.size() <= 120
+        && data.corridor is string && data.corridor.size() >= 2 && data.corridor.size() <= 64
+        && data.topic in ['jalan', 'jalur_alternatif', 'keramaian', 'cuaca', 'bahan_baku']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
+        && data.body is string && data.body.size() >= 3 && data.body.size() <= 600
+        && data.helpful_count is number && data.helpful_count >= 0 && data.helpful_count <= 100000
+        && data.created_at is timestamp;
+    }
+
+    match /community_posts/{postId} {
+      allow get: if isValidId(postId);
+      allow list: if resource.data.post_id is string;
+      allow create: if isVerified() && isValidId(postId)
+        && isValidCommunityPost(incoming())
+        && incoming().post_id == postId
+        && incoming().author_uid == request.auth.uid
+        && incoming().helpful_count == 0
+        && incoming().created_at == request.time;
+      allow update: if isVerified() && isValidId(postId)
+        && isValidCommunityPost(incoming())
+        && incoming().post_id == existing().post_id
+        && incoming().author_uid == existing().author_uid
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['helpful_count'])
+        && incoming().helpful_count == existing().helpful_count + 1;
+      allow delete: if isVerified() && isValidId(postId) && (existing().author_uid == request.auth.uid || isAdmin());
+    }
+
+    // --- 10. Rodaloka Modal Pintar (Private Financial Ledger) ---
+    function isValidLedgerEntry(data) {
+      return data.keys().hasAll(['entry_id', 'owner_uid', 'vendor_id', 'type', 'category', 'description', 'amount', 'payment_method', 'created_at'])
+        && data.keys().hasOnly(['entry_id', 'owner_uid', 'vendor_id', 'type', 'category', 'description', 'amount', 'payment_method', 'created_at'])
+        && data.entry_id is string && data.entry_id.size() >= 4 && data.entry_id.size() <= 64
+        && data.owner_uid is string && data.owner_uid == request.auth.uid
+        && data.vendor_id is string && data.vendor_id.size() >= 4 && data.vendor_id.size() <= 64
+        && data.type in ['income', 'expense']
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 64
+        && data.description is string && data.description.size() >= 2 && data.description.size() <= 200
+        && data.amount is number && data.amount >= 500 && data.amount <= 500000000
+        && data.payment_method in ['Tunai', 'QRIS', 'Transfer']
+        && data.created_at is timestamp;
+    }
+
+    match /ledger_entries/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId) && existing().owner_uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.owner_uid == request.auth.uid;
+      allow create: if isVerified() && isValidId(entryId)
+        && isValidLedgerEntry(incoming())
+        && incoming().entry_id == entryId
+        && incoming().created_at == request.time;
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(entryId) && existing().owner_uid == request.auth.uid;
+    }
+  }
+}

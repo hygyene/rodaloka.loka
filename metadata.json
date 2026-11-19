@@ -1,0 +1,6 @@
+{
+  "name": "RODALOKA — Dari Kaki Lima, Untuk Semua",
+  "description": "Platform digital kuliner kaki lima dan UMKM keliling Indonesia dengan pelacakan pesanan 5 tahap, dashboard pedagang, sinkronisasi Google Sheets 8-tabel, dan asisten bisnis cerdas.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

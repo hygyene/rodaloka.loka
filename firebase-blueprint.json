@@ -1,0 +1,253 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Master akun pengguna RODALOKA (Sheet 1: Users) dengan isolasi PII per pemilik.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "maxLength": 64, "pattern": "^USR-[a-zA-Z0-9_\\-]+$" },
+        "uid": { "type": "string", "maxLength": 128 },
+        "full_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "phone_number": { "type": "string", "maxLength": 24 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "auth_provider": { "type": "string", "enum": ["google", "facebook", "phone"] },
+        "active_role": { "type": "string", "enum": ["pedagang", "pembeli"] },
+        "avatar_url": { "type": "string", "maxLength": 500 },
+        "saved_addresses": { "type": "array" },
+        "spreadsheet_id": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "uid", "full_name", "auth_provider", "active_role", "created_at"]
+    },
+    "Vendor": {
+      "title": "Vendor",
+      "description": "Profil publik toko atau gerobak pedagang keliling Pantura (Sheet 2: Vendors).",
+      "type": "object",
+      "properties": {
+        "vendor_id": { "type": "string", "maxLength": 64, "pattern": "^VND-[a-zA-Z0-9_\\-]+$" },
+        "owner_uid": { "type": "string", "maxLength": 128 },
+        "user_id": { "type": "string", "maxLength": 64 },
+        "shop_name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "username": { "type": "string", "minLength": 2, "maxLength": 64, "pattern": "^@[a-z0-9_.]+$" },
+        "category": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 600 },
+        "address_text": { "type": "string", "maxLength": 240 },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "lat_lng": { "type": "string", "maxLength": 64 },
+        "operating_hours": { "type": "string", "maxLength": 64 },
+        "is_open": { "type": "boolean" },
+        "rating_avg": { "type": "number" },
+        "review_count": { "type": "number" },
+        "delivery_fee": { "type": "number" },
+        "media": { "type": "object" },
+        "courier_public": { "type": "object" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vendor_id", "owner_uid", "user_id", "shop_name", "username", "category", "address_text", "lat", "lng", "operating_hours", "is_open", "created_at"]
+    },
+    "VendorFinance": {
+      "title": "VendorFinance",
+      "description": "Data sensitif rekening bank dan kontak pribadi kurir pedagang (isolasi PII).",
+      "type": "object",
+      "properties": {
+        "owner_uid": { "type": "string", "maxLength": 128 },
+        "bank_name": { "type": "string", "maxLength": 64 },
+        "account_number": { "type": "string", "maxLength": 40 },
+        "account_holder": { "type": "string", "maxLength": 120 },
+        "courier_phone": { "type": "string", "maxLength": 24 },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["owner_uid", "bank_name", "account_number", "account_holder", "updated_at"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Katalog menu makanan dan minuman pedagang (Sheet 3: Products).",
+      "type": "object",
+      "properties": {
+        "product_id": { "type": "string", "maxLength": 64, "pattern": "^PRD-[a-zA-Z0-9_\\-]+$" },
+        "vendor_id": { "type": "string", "maxLength": 64 },
+        "owner_uid": { "type": "string", "maxLength": 128 },
+        "product_name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 400 },
+        "category": { "type": "string", "enum": ["Makanan", "Minuman"] },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "is_available": { "type": "boolean" },
+        "image_url": { "type": "string", "maxLength": 500 },
+        "sold_count": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["product_id", "vendor_id", "owner_uid", "product_name", "category", "price", "stock", "is_available", "sold_count", "created_at"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Header transaksi pesanan dan pelacakan status 5 tahap (Sheet 4: Orders).",
+      "type": "object",
+      "properties": {
+        "order_id": { "type": "string", "maxLength": 64, "pattern": "^ORD-[a-zA-Z0-9_\\-]+$" },
+        "buyer_uid": { "type": "string", "maxLength": 128 },
+        "buyer_id": { "type": "string", "maxLength": 64 },
+        "buyer_name": { "type": "string", "maxLength": 120 },
+        "vendor_id": { "type": "string", "maxLength": 64 },
+        "vendor_owner_uid": { "type": "string", "maxLength": 128 },
+        "vendor_name": { "type": "string", "maxLength": 120 },
+        "delivery_address": { "type": "string", "maxLength": 300 },
+        "subtotal": { "type": "number" },
+        "delivery_fee": { "type": "number" },
+        "total_amount": { "type": "number" },
+        "payment_method": { "type": "string", "enum": ["Tunai", "QRIS", "Transfer"] },
+        "payment_status": { "type": "string", "enum": ["unpaid", "paid"] },
+        "order_status": { "type": "string", "enum": ["received", "preparing", "ready", "delivering", "completed", "rejected"] },
+        "buyer_note": { "type": "string", "maxLength": 300 },
+        "eta_minutes": { "type": "number" },
+        "items_summary": { "type": "array" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["order_id", "buyer_uid", "buyer_id", "vendor_id", "vendor_owner_uid", "delivery_address", "subtotal", "delivery_fee", "total_amount", "payment_method", "payment_status", "order_status", "eta_minutes", "created_at"]
+    },
+    "OrderItem": {
+      "title": "OrderItem",
+      "description": "Rincian item per nota pesanan beserta snapshot harga (Sheet 5: Order_Items).",
+      "type": "object",
+      "properties": {
+        "item_id": { "type": "string", "maxLength": 64 },
+        "order_id": { "type": "string", "maxLength": 64 },
+        "product_id": { "type": "string", "maxLength": 64 },
+        "product_name": { "type": "string", "maxLength": 120 },
+        "qty": { "type": "number" },
+        "unit_price": { "type": "number" },
+        "line_total": { "type": "number" }
+      },
+      "required": ["item_id", "order_id", "product_id", "product_name", "qty", "unit_price", "line_total"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "Relasi pembeli dengan toko favorit dan langganan jadwal (Sheet 6: Favorites).",
+      "type": "object",
+      "properties": {
+        "fav_id": { "type": "string", "maxLength": 160 },
+        "user_uid": { "type": "string", "maxLength": 128 },
+        "user_id": { "type": "string", "maxLength": 64 },
+        "vendor_id": { "type": "string", "maxLength": 64 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fav_id", "user_uid", "user_id", "vendor_id", "created_at"]
+    },
+    "Promo": {
+      "title": "Promo",
+      "description": "Banner promosi dinamis Beranda Pembeli (Sheet 7: Promos).",
+      "type": "object",
+      "properties": {
+        "promo_id": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 120 },
+        "subtitle": { "type": "string", "maxLength": 240 },
+        "banner_url": { "type": "string", "maxLength": 500 },
+        "discount_pct": { "type": "number" },
+        "is_active": { "type": "boolean" }
+      },
+      "required": ["promo_id", "title", "subtitle", "banner_url", "discount_pct", "is_active"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Riwayat notifikasi real-time untuk pedagang dan pembeli (Sheet 8: Notifications).",
+      "type": "object",
+      "properties": {
+        "notif_id": { "type": "string", "maxLength": 64 },
+        "recipient_uid": { "type": "string", "maxLength": 128 },
+        "sender_uid": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["order", "payment", "promo", "app"] },
+        "title": { "type": "string", "maxLength": 120 },
+        "body": { "type": "string", "maxLength": 400 },
+        "is_read": { "type": "boolean" },
+        "order_id": { "type": "string", "maxLength": 64 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notif_id", "recipient_uid", "sender_uid", "category", "title", "body", "is_read", "created_at"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "Laporan lapangan Komunitas & Suara Pedagang Pantura (jalan, jalur alternatif, keramaian, cuaca, bahan baku).",
+      "type": "object",
+      "properties": {
+        "post_id": { "type": "string", "maxLength": 64 },
+        "author_uid": { "type": "string", "maxLength": 128 },
+        "author_name": { "type": "string", "maxLength": 120 },
+        "corridor": { "type": "string", "maxLength": 64 },
+        "topic": { "type": "string", "enum": ["jalan", "jalur_alternatif", "keramaian", "cuaca", "bahan_baku"] },
+        "title": { "type": "string", "maxLength": 140 },
+        "body": { "type": "string", "maxLength": 600 },
+        "helpful_count": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["post_id", "author_uid", "author_name", "corridor", "topic", "title", "body", "helpful_count", "created_at"]
+    },
+    "LedgerEntry": {
+      "title": "LedgerEntry",
+      "description": "Catatan pembukuan pemasukan dan pengeluaran Rodaloka Modal Pintar milik pedagang.",
+      "type": "object",
+      "properties": {
+        "entry_id": { "type": "string", "maxLength": 64 },
+        "owner_uid": { "type": "string", "maxLength": 128 },
+        "vendor_id": { "type": "string", "maxLength": 64 },
+        "type": { "type": "string", "enum": ["income", "expense"] },
+        "category": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 200 },
+        "amount": { "type": "number" },
+        "payment_method": { "type": "string", "enum": ["Tunai", "QRIS", "Transfer"] },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["entry_id", "owner_uid", "vendor_id", "type", "category", "description", "amount", "payment_method", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Profil privat pengguna (PII terisolasi hanya untuk pemilik)."
+    },
+    "/vendors/{vendorId}": {
+      "schema": { "$ref": "#/entities/Vendor" },
+      "description": "Etalase publik pedagang keliling Pantura."
+    },
+    "/vendors/{vendorId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/VendorFinance" },
+      "description": "Informasi rekening bank dan kontak pribadi kurir (hanya pemilik toko)."
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Katalog menu makanan dan minuman per pedagang."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Transaksi pesanan aktif dan riwayat."
+    },
+    "/orders/{orderId}/items/{itemId}": {
+      "schema": { "$ref": "#/entities/OrderItem" },
+      "description": "Subkoleksi rincian item per pesanan."
+    },
+    "/favorites/{favId}": {
+      "schema": { "$ref": "#/entities/Favorite" },
+      "description": "Daftar toko favorit dan langganan milik pembeli."
+    },
+    "/promos/{promoId}": {
+      "schema": { "$ref": "#/entities/Promo" },
+      "description": "Daftar promo aktif untuk halaman eksplorasi."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Pusat notifikasi real-time per pengguna."
+    },
+    "/community_posts/{postId}": {
+      "schema": { "$ref": "#/entities/CommunityPost" },
+      "description": "Forum laporan lapangan Komunitas Pedagang Pantura."
+    },
+    "/ledger_entries/{entryId}": {
+      "schema": { "$ref": "#/entities/LedgerEntry" },
+      "description": "Pembukuan Rodaloka Modal Pintar privat per pemilik usaha."
+    }
+  }
+}
